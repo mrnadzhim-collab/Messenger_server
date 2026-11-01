@@ -49,6 +49,8 @@ private:
     void deliverPending(ClientSession *session);
     void sendUsers(ClientSession *session);
     void sendHistory(ClientSession *session, qint64 peerId);
+    void handleMessage(ClientSession *session, const QJsonObject &obj);
+    void handleRead(ClientSession *session, const QJsonObject &obj);
 
     QSqlDatabase m_db;
     QMap<qint64, ClientSession *> m_online;

@@ -183,7 +183,7 @@ void Server::deliverPending(ClientSession *session)
     session->send(o);
 
     QSqlQuery u(m_db);
-    u.prepare(QStringLiteral("UPDATE messages SET delivered=1 WHERE to_id=? AND delivered=0"));
+    u.prepare(QString("UPDATE messages SET delivered=1 WHERE to_id=? AND delivered=0"));
     u.addBindValue(me);
     u.exec();
 
@@ -263,6 +263,81 @@ void Server::sendHistory(ClientSession *session, qint64 peerId)
         if (m_online.contains(peerId))
             m_online[peerId]->send(n);
     }
+}
+
+void Server::handleMessage(ClientSession *session, const QJsonObject &obj)
+{
+    const qint64 from = session->userId();
+    const qint64 to = obj[JSON_FIELDS::F_TO].toVariant().toLongLong();
+    const QString text = obj[JSON_FIELDS::F_TEXT].toString();
+    const QString fileName = obj[JSON_FIELDS::F_FILENAME].toString();
+    const QByteArray fileData = QByteArray::fromBase64(obj[JSON_FIELDS::F_FILE_B64].toString().toUtf8());
+
+    QSqlQuery check(m_db);
+    check.prepare(QString("SELECT id FROM users WHERE id=?"));
+    check.addBindValue(to);
+    if (!(check.exec() && check.next())) {
+        sendError(session, QString("Получатель не найден"));
+        return;
+    }
+
+    const qint64 ts = QDateTime::currentSecsSinceEpoch();
+    const bool online = m_online.contains(to);
+
+    QSqlQuery q(m_db);
+    q.prepare(QString(
+        "INSERT INTO messages(from_id, to_id, text, file_name, file_data, ts, delivered) "
+        "VALUES(?,?,?,?,?,?,?)"));
+    q.addBindValue(from);
+    q.addBindValue(to);
+    q.addBindValue(text);
+    q.addBindValue(fileName.isEmpty() ? QVariant() : QVariant(fileName));
+    q.addBindValue(fileData.isEmpty() ? QVariant() : QVariant(fileData));
+    q.addBindValue(ts);
+    q.addBindValue(online ? 1 : 0);
+    if (!q.exec()) {
+        sendError(session, QString("Не удалось сохранить сообщение"));
+        return;
+    }
+    const qint64 id = q.lastInsertId().toLongLong();
+
+    QJsonObject ack;
+    ack[JSON_FIELDS::F_TYPE] = JSON_MESSEGES::M_MSG_ACK;
+    ack[JSON_FIELDS::F_CID] = obj.value(JSON_FIELDS::F_CID);
+    ack[JSON_FIELDS::F_ID] = (double)id;
+    ack[JSON_FIELDS::F_TS] = (double)ts;
+    ack[JSON_FIELDS::F_TO] = (double)to;
+    ack[JSON_FIELDS::F_DELIVERED] = online;
+    session->send(ack);
+
+    if (online) {
+        QJsonObject o;
+        o[JSON_FIELDS::F_TYPE] = JSON_MESSEGES::M_MSG;
+        o[JSON_FIELDS::F_MSG] = makeMsg(id, from, to, text, fileName, ts, 1, 0);
+        m_online[to]->send(o);
+    }
+}
+
+void Server::handleRead(ClientSession *session, const QJsonObject &obj)
+{
+    const qint64 me = session->userId();
+    const qint64 peer = obj[JSON_FIELDS::F_PEER].toVariant().toLongLong();
+    const QJsonArray ids = obj[JSON_FIELDS::F_IDS].toArray();
+    for (const QJsonValue &v : ids) {
+        QSqlQuery u(m_db);
+        u.prepare(QString("UPDATE messages SET read=1 WHERE id=? AND from_id=? AND to_id=? AND read=0"));
+        u.addBindValue(v.toVariant().toLongLong());
+        u.addBindValue(peer);
+        u.addBindValue(me);
+        u.exec();
+    }
+
+    QJsonObject n;
+    n[JSON_FIELDS::F_TYPE] = JSON_MESSEGES::M_READ;
+    n[JSON_FIELDS::F_PEER] = (double)me;
+    n[JSON_FIELDS::F_IDS] = ids;
+    if (m_online.contains(peer))
+        m_online[peer]->send(n);
 }
 
 void Server::handlePacket(ClientSession *session, const QJsonObject &obj)
@@ -359,6 +434,10 @@ void Server::handlePacket(ClientSession *session, const QJsonObject &obj)
         sendUsers(session);
     } else if (t == JSON_MESSEGES::M_HISTORY) {
         sendHistory(session, obj[JSON_FIELDS::F_PEER].toVariant().toLongLong());
+    }  else if (t == JSON_MESSEGES::M_MSG) {
+        handleMessage(session, obj);
+    } else if (t == JSON_MESSEGES::M_READ) {
+        handleRead(session, obj);
     }
 }
 

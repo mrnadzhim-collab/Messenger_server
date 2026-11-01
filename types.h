@@ -16,6 +16,8 @@ const QString M_DELIVERED       = QString("delivered");     // сообщени�
 const QString M_USERS           = QString("users");         // пользователи
 const QString M_HISTORY         = QString("history");       // история
 const QString M_READ            = QString("read");          // прочтено
+const QString M_MSG             = QString("msg");           // сообщение
+const QString M_MSG_ACK         = QString("msg_ack");       // подтвержденное сообщение
 }
 
 // Описание полей JSON-документа
@@ -35,6 +37,8 @@ const QString F_FROM            = QString("from");          // от кого
 const QString F_TO              = QString("to");            // кому
 const QString F_TEXT            = QString("text");          // текст
 const QString F_FILENAME        = QString("file_name");     // имя файла
+const QString F_FILE_B64        = QString("file_b64");      // данные файла
+const QString F_CID             = QString("cid");           // временный идентификатор пользователя
 const QString F_HASFILE         = QString("has_file");      // признак наличия файла
 const QString F_TS              = QString("ts");            // время
 const QString F_DELIVERED       = QString("delivered");     // признак доставки сообщения
