@@ -5,16 +5,43 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDateTime>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QCryptographicHash>
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 
 #include "errors.h"
 
+static QString hashPassword(const QString &password)
+{
+    return QString::fromUtf8(QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha256).toHex());
+}
+
+static QJsonObject makeMsg(qint64 id, qint64 from, qint64 to, const QString &text,
+                           const QString &fileName, qint64 ts, int delivered, int read)
+{
+    QJsonObject m;
+    m["id"] = (double)id;
+    m["from"] = (double)from;
+    m["to"] = (double)to;
+    m["text"] = text;
+    m["file_name"] = fileName;
+    m["has_file"] = !fileName.isEmpty();
+    m["ts"] = (double)ts;
+    m["delivered"] = delivered;
+    m["read"] = read;
+    return m;
+}
+
 Server::Server(quint16 port, const QString &dbPath, QObject *parent)
     : QTcpServer(parent), m_dbPath(dbPath)
 {
     initDb();
+
+    if (!listen(QHostAddress::Any, port))
+        qFatal("Не удалось запустить сервер на порту %d", (int)port);
 }
 
 void Server::initDb()
