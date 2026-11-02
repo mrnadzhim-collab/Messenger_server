@@ -16,4 +16,5 @@ SOURCES += \
 
 HEADERS += \
     errors.h \
+    protocol.h \
     server.h
