@@ -15,4 +15,5 @@ SOURCES += \
 
 
 HEADERS += \
+    errors.h \
     server.h
