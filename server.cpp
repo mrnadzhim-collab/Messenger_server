@@ -47,5 +47,5 @@ void Server::initDb()
         "delivered INTEGER DEFAULT 0,"
         "read INTEGER DEFAULT 0)"));
 
-    qDebug() << "База данных готова";
+    qDebug() << "База данных готова!";
 }
