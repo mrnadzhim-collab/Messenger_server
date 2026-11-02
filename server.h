@@ -7,6 +7,30 @@
 #include <QByteArray>
 #include <QSqlDatabase>
 
+class ClientSession : public QObject
+{
+    Q_OBJECT
+public:
+    explicit ClientSession(QTcpSocket *socket, QObject *parent = nullptr);
+    QTcpSocket *socket() const { return m_socket; }
+    qint64 userId() const { return m_userId; }
+    void setUserId(qint64 id) { m_userId = id; }
+    void send(const QJsonObject &obj);
+
+signals:
+    void packetReady(ClientSession *session, const QJsonObject &obj);
+    void sessionEnded(ClientSession *session);
+
+private slots:
+    void onReadyRead();
+    void onDisconnected();
+
+private:
+    QTcpSocket *m_socket;
+    QByteArray m_buffer;
+    qint64 m_userId;
+};
+
 class Server : public QTcpServer
 {
     Q_OBJECT

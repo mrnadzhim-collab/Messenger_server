@@ -13,6 +13,7 @@
 #include <QFileInfo>
 
 #include "errors.h"
+#include "protocol.h"
 
 static QString hashPassword(const QString &password)
 {
@@ -33,6 +34,31 @@ static QJsonObject makeMsg(qint64 id, qint64 from, qint64 to, const QString &tex
     m["delivered"] = delivered;
     m["read"] = read;
     return m;
+}
+
+ClientSession::ClientSession(QTcpSocket *socket, QObject *parent)
+    : QObject(parent), m_socket(socket), m_userId(-1)
+{
+    connect(m_socket, &QTcpSocket::readyRead, this, &ClientSession::onReadyRead);
+    connect(m_socket, &QTcpSocket::disconnected, this, &ClientSession::onDisconnected);
+}
+
+void ClientSession::send(const QJsonObject &obj)
+{
+    m_socket->write(Protocol::encode(obj));
+}
+
+void ClientSession::onReadyRead()
+{
+    m_buffer.append(m_socket->readAll());
+    const QList<QJsonObject> packets = Protocol::decode(m_buffer);
+    for (const QJsonObject &obj : packets)
+        emit packetReady(this, obj);
+}
+
+void ClientSession::onDisconnected()
+{
+    emit sessionEnded(this);
 }
 
 Server::Server(quint16 port, const QString &dbPath, QObject *parent)
