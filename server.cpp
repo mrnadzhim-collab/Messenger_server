@@ -196,6 +196,30 @@ void Server::deliverPending(ClientSession *session)
     }
 }
 
+void Server::sendUsers(ClientSession *session)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QString("SELECT id, username, name FROM users WHERE id != ? ORDER BY name"));
+    q.addBindValue(session->userId());
+    QJsonArray list;
+    if (q.exec()) {
+        while (q.next()) {
+            qint64 id = q.value(0).toLongLong();
+            QJsonObject u;
+            u[JSON_FIELDS::F_ID] = (double)id;
+            u[JSON_FIELDS::F_USERNAME] = q.value(1).toString();
+            u[JSON_FIELDS::F_NAME] = q.value(2).toString();
+            u[JSON_FIELDS::F_ONLINE] = m_online.contains(id);
+            list.append(u);
+        }
+    }
+
+    QJsonObject o;
+    o[JSON_FIELDS::F_TYPE] = JSON_MESSEGES::M_USERS;
+    o[JSON_FIELDS::F_LIST] = list;
+    session->send(o);
+}
+
 void Server::handlePacket(ClientSession *session, const QJsonObject &obj)
 {
     const QString t = obj[JSON_FIELDS::F_TYPE].toString();
@@ -284,6 +308,10 @@ void Server::handlePacket(ClientSession *session, const QJsonObject &obj)
     if (session->userId() < 0) {
         sendError(session, QString("Сначала выполните вход"));
         return;
+    }
+
+    if (t == "users") {
+        sendUsers(session);
     }
 }
 
