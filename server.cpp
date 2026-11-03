@@ -220,6 +220,51 @@ void Server::sendUsers(ClientSession *session)
     session->send(o);
 }
 
+void Server::sendHistory(ClientSession *session, qint64 peerId)
+{
+    const qint64 me = session->userId();
+    QSqlQuery q(m_db);
+    q.prepare(QString(
+        "SELECT id, from_id, to_id, text, file_name, ts, delivered, read FROM messages "
+        "WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?) ORDER BY id"));
+    q.addBindValue(me);
+    q.addBindValue(peerId);
+    q.addBindValue(peerId);
+    q.addBindValue(me);
+    QJsonArray msgs;
+    QJsonArray readIds;
+    if (q.exec()) {
+        while (q.next()) {
+            qint64 id = q.value(0).toLongLong();
+            qint64 from = q.value(1).toLongLong();
+            msgs.append(makeMsg(id, from, q.value(2).toLongLong(),
+                                q.value(3).toString(), q.value(4).toString(),
+                                q.value(5).toLongLong(), q.value(6).toInt(), q.value(7).toInt()));
+            if (from == peerId && q.value(7).toInt() == 0)
+                readIds.append((double)id);
+        }
+    }
+    QJsonObject o;
+    o[JSON_FIELDS::F_TYPE] = JSON_MESSEGES::M_HISTORY;
+    o[JSON_FIELDS::F_PEER] = (double)peerId;
+    o[JSON_FIELDS::F_MSGS] = msgs;
+    session->send(o);
+
+    if (!readIds.isEmpty()) {
+        QSqlQuery u(m_db);
+        u.prepare(QString("UPDATE messages SET read=1 WHERE from_id=? AND to_id=? AND read=0"));
+        u.addBindValue(peerId);
+        u.addBindValue(me);
+        u.exec();
+        QJsonObject n;
+        n[JSON_FIELDS::F_TYPE] = JSON_MESSEGES::M_READ;
+        n[JSON_FIELDS::F_PEER] = (double)me;
+        n[JSON_FIELDS::F_IDS] = readIds;
+        if (m_online.contains(peerId))
+            m_online[peerId]->send(n);
+    }
+}
+
 void Server::handlePacket(ClientSession *session, const QJsonObject &obj)
 {
     const QString t = obj[JSON_FIELDS::F_TYPE].toString();
@@ -310,8 +355,10 @@ void Server::handlePacket(ClientSession *session, const QJsonObject &obj)
         return;
     }
 
-    if (t == "users") {
+    if (t == JSON_MESSEGES::M_USERS) {
         sendUsers(session);
+    } else if (t == JSON_MESSEGES::M_HISTORY) {
+        sendHistory(session, obj[JSON_FIELDS::F_PEER].toVariant().toLongLong());
     }
 }
 

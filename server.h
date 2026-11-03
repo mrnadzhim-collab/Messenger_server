@@ -48,6 +48,7 @@ private:
     void sendAuthOk(ClientSession *session, qint64 userId);
     void deliverPending(ClientSession *session);
     void sendUsers(ClientSession *session);
+    void sendHistory(ClientSession *session, qint64 peerId);
 
     QSqlDatabase m_db;
     QMap<qint64, ClientSession *> m_online;
