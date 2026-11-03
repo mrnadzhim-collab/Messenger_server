@@ -37,11 +37,24 @@ class Server : public QTcpServer
 public:
     explicit Server(quint16 port, const QString &dbPath, QObject *parent = nullptr);
 
+protected:
+    void incomingConnection(qintptr handle) override;
+
 private:
     void initDb();
 
+    void broadcast(const QJsonObject &obj, qint64 exceptId = -1);
+    void sendError(ClientSession *session, const QString &text);
+    void sendAuthOk(ClientSession *session, qint64 userId);
+    void deliverPending(ClientSession *session);
+
     QSqlDatabase m_db;
+    QMap<qint64, ClientSession *> m_online;
     QString m_dbPath;
+
+private slots:
+    void handlePacket(ClientSession *session, const QJsonObject &obj);
+    void handleDisconnect(ClientSession *session);
 };
 
 #endif // SERVER_H
